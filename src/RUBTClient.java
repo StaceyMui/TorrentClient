@@ -16,7 +16,6 @@ import java.util.Map;
 import java.util.Random;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
 import GivenTools.Bencoder2;
 import GivenTools.BencodingException;
 import GivenTools.TorrentInfo;
@@ -40,7 +39,6 @@ public class RUBTClient extends Thread
 	 * Logger for the local client.
 	 */
 	private final static Logger LOGGER = Logger.getLogger(RUBTClient.class.getName());
-	
 
 /*private final TorrentInfo tInfo;
 
@@ -126,6 +124,10 @@ private final int left;*/
 			try {
 				//generatePeerId();
 				ArrayList<Peer> peers = getListOfPeersHttpUrl(tInfo);
+				
+				LOGGER.info("Retrieved peers. Extracting peers with RU- prefix");
+				
+				ArrayList<Peer> RUPeer = getRUPeer(peers);
 			} catch (IOException e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
@@ -141,25 +143,25 @@ private final int left;*/
 		byte[] peerId=null, trackerResponse; 
 		ByteBuffer bytebuffer;
 		int port = 0, i; 
-		String ip="", stringid, key;
+		String ip="", key;
 		
+		LOGGER.info("Sending Get Request from tracker");
 		trackerResponse = getRequest(tInfo);
 		
+		LOGGER.info("Decoding tracker's request");
 		@SuppressWarnings("unchecked") //decoding Tracker response
 		HashMap<ByteBuffer, Object> response = (HashMap<ByteBuffer, Object>)Bencoder2.decode(trackerResponse);
-		
 		
 		//More plagarized code below
 		ArrayList<Peer> p = new ArrayList<Peer>();
 		
 		//extracting  interval
 		int interval = (Integer)response.get(ByteBuffer.wrap(new byte[] {'i', 'n', 't', 'e', 'r', 'v', 'a', 'l' }));
-		System.out.println(interval);
+		LOGGER.info("Extracted Interval: " + interval + "\n Extracting peers from decoded diction from tracker");
 		
 		@SuppressWarnings("unchecked")
 		List<Map<ByteBuffer, Object>> objectList = (List<Map<ByteBuffer, Object>>) response.get( ByteBuffer.wrap(new byte[] {'p', 'e', 'e', 'r', 's' }));
 		for (Map<ByteBuffer, Object> object : objectList) {
-			System.out.println("NEW PEER");
 			for( i = 0; i < object.size(); ++ i){
 				bytebuffer = (ByteBuffer)object.keySet().toArray()[i];		
 				key = get_string(bytebuffer);
@@ -171,23 +173,20 @@ private final int left;*/
 					peerId = ((ByteBuffer)object.get(bytebuffer)).array();
 			}
 			p.add(new Peer(peerId, port, ip));
-			stringid = new String(peerId);
-			System.out.println("PeerId -> " + stringid);
-			System.out.println("Port -> "+ port);
-	        System.out.println("IP-> " + ip);
 		}
 		return p;
 	}
 	
 	private static ArrayList<Peer> getRUPeer(ArrayList<Peer> peerlist) {
-		ArrayList<Peer> RUPeer = new ArrayList<Peer>();
+		ArrayList<Peer> ruPeer = new ArrayList<Peer>();
 		String peerIdString;
 		for (Peer p: peerlist){
 			peerIdString = p.getStringPeerId();
-			if(peerIdString.charAt(0)=='R' && peerIdString.charAt(1)=='U')
-				RUPeer.add(p);
+			if(peerIdString.charAt(0)=='-' && peerIdString.charAt(1)=='R' && peerIdString.charAt(2)=='U'){
+				ruPeer.add(p);
+			}
 		}
-		return RUPeer;		
+		return ruPeer;
 	}
 
 	public static byte[] getRequest(TorrentInfo tInfo) throws IOException, URISyntaxException {
