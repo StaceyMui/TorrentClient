@@ -1,21 +1,29 @@
+import java.io.BufferedReader;
+import java.io.DataOutputStream;
 import java.io.File;
 import java.io.DataInputStream;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
+import java.net.Socket;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.ByteBuffer;
 import java.io.IOException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
 import GivenTools.Bencoder2;
 import GivenTools.BencodingException;
 import GivenTools.TorrentInfo;
@@ -50,14 +58,15 @@ private final int pieceLength;
 
 private int port = 6881;
 
-
 private final int downloaded;
 
 private final int uploaded;
 
 private final int left;*/
+	
+	private static byte[] clientID = generatePeerId();
 
-	public static void main(String[] args) throws URISyntaxException, IOException, BencodingException 
+	public static void main(String[] args) throws URISyntaxException, IOException, BencodingException, NoSuchAlgorithmException 
 	{
 		//Set level of logger to INFO or higher
 		LOGGER.setLevel(Level.INFO);
@@ -125,9 +134,18 @@ private final int left;*/
 				//generatePeerId();
 				ArrayList<Peer> peers = getListOfPeersHttpUrl(tInfo);
 				
-				LOGGER.info("Retrieved peers. Extracting peers with RU- prefix");
+				LOGGER.info("Retrieved peers. Extracting peers with -RU prefix");
 				
-				ArrayList<Peer> RUPeer = getRUPeer(peers);
+				Peer RUPeer = getRUPeer(peers);
+				
+				if (RUPeer == null) 
+				{
+					LOGGER.log(Level.SEVERE, "There is no eligible peer to connect with.");
+					System.exit(1);
+				}
+				LOGGER.info("Extracted appropriate peers. Performing handshake" );
+				peerHandshake(RUPeer, tInfo);
+				
 			} catch (IOException e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
@@ -177,16 +195,15 @@ private final int left;*/
 		return p;
 	}
 	
-	private static ArrayList<Peer> getRUPeer(ArrayList<Peer> peerlist) {
-		ArrayList<Peer> ruPeer = new ArrayList<Peer>();
+	private static Peer getRUPeer(ArrayList<Peer> peerlist) {
 		String peerIdString;
 		for (Peer p: peerlist){
 			peerIdString = p.getStringPeerId();
-			if(peerIdString.charAt(0)=='-' && peerIdString.charAt(1)=='R' && peerIdString.charAt(2)=='U'){
-				ruPeer.add(p);
+			if(peerIdString.charAt(0)=='-' && peerIdString.charAt(1)=='R' && peerIdString.charAt(2)=='U') {
+				return p;
 			}
 		}
-		return ruPeer;
+		return null;
 	}
 
 	public static byte[] getRequest(TorrentInfo tInfo) throws IOException, URISyntaxException {
@@ -214,7 +231,7 @@ private final int left;*/
 		String stringKey = uri.getPath() + "?info_hash=";
 		for(byte b : hash)
 			stringKey = stringKey + "%" + String.format("%02X", b);
-		stringKey = stringKey + "&peer_id=" + generatePeerId() + "&port=6881&uploaded=0&downloaded=0&left=" + ti.file_length + "&event=started";
+		stringKey = stringKey + "&peer_id=" + clientID + "&port=6881&uploaded=0&downloaded=0&left=" + ti.file_length + "&event=started";
 	    URI newUri = uri.resolve(stringKey);
 	    return newUri.toURL();
 	}
@@ -232,6 +249,51 @@ private final int left;*/
 		System.arraycopy(remainPeerId, 0, peerId, 2, remainPeerId.length);
 		return peerId;
 	}
+	
+	private static void peerHandshake(Peer p, TorrentInfo ti) throws IOException, BencodingException, NoSuchAlgorithmException {
+		Socket TCPSocket = new Socket(p.ip, p.port);
+		byte[] reserved = new byte[8], peerHandshake = new byte[68];
+		
+		//BufferedReader br = new BufferedReader(new InputStreamReader(TCPSocket.getInputStream()));
+		DataInputStream dis = new DataInputStream(TCPSocket.getInputStream());
+		DataOutputStream os = new DataOutputStream(TCPSocket.getOutputStream());
+		String protocolId = "BitTorrent Protocol", peerID = p.getStringPeerId(), peerResponse;
+		
+		Arrays.fill( reserved, (byte) 0 );
+		os.writeByte(19);
+		os.writeBytes(protocolId);
+		os.write(reserved, 0, reserved.length);
+		byte[] hash = ti.info_hash.array();
+		os.write(Bencoder2.encode((ByteBuffer.wrap(hash))));
+		os.write(clientID);
+		
+		dis.readFully(peerHandshake);
+		
+		 for(int i = 0; i<20; i++){
+		    	if((char)peerHandshake[i+48] != peerID.charAt(i)){
+		    		LOGGER.log(Level.SEVERE, "Connected with the wrong peer.");
+		    		TCPSocket.close();
+		    		return;
+		    	}
+		 }
+		
+		 MessageDigest digest = null;
+		 digest = MessageDigest.getInstance("SHA-1");
+			
+			digest.update(peerHandshake);
+			byte[] info_hash_of_response = digest.digest();
+		    
+			if (Arrays.equals(info_hash_of_response, ti.info_hash.array())){
+				System.out.println("Peer connection issue: info hashes do not match");
+		    } 
+		 
+		//Sending interested message
+		/*os.writeByte( 1 );
+		os.writeInt( 2 );
+		peerResponse = br.readLine();
+		TCPSocket.close();*/
+	}
+	
 /*private int getDownloaded() 
 {
 	return this.downloaded;
@@ -240,24 +302,7 @@ private final int left;*/
 synchronized void addDownloaded(int downloaded) {
 	LOGGER.info("Amount downloaded = " + this.downloaded);
 	this.downloaded += downloaded;		
-}
-
-private static void peerHandshake() {
-	BufferedReader br = new BufferedReader(new InputStreamReader(TCPSocket.getInputStream()));
-	byte[] reserved = new byte[8];
-	DataOutputStream os = new DataOutputStream(TCPSocket.getOutputStream());	
-	Socket TCPSocket = new Socket();
-	String protocolId = "BitTorrent Protocol", peerHandshake, peerResponse;
-	
-	Arrays.fill( reserved, (byte) 0 );
-	os.writeByte(1);
-	os.writeBytes(protocolId);
-	os.write(reserved, 0, reserved.length());
-	// write SHA1 hash and peerId
-	peerHandshake = br.readLine();
-	//Sending interested message
-	out.writeByte( 1 );
-	out.writeInt( 2 );
-	peerResponse = br.readLine();
 }*/
+
+
 }
