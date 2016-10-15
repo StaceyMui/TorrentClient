@@ -13,8 +13,12 @@ public class Peer {
 		this.ip = ip;
 	}
 	
-	public byte[] getpeerId() {
+	public byte[] getPeerId() {
         return peerId;
+    }
+	
+	public String getStringPeerId() {
+        return new String(peerId);
     }
 	
 	public int getport() {

@@ -123,17 +123,16 @@ private final int left;*/
 			LOGGER.log(Level.WARNING, "Bencoding exception", be);
 		}	
 			LOGGER.info("Getting list of peers...");
-			//try {
+			try {
 				//generatePeerId();
 				ArrayList<Peer> peers = getListOfPeersHttpUrl(tInfo);
-			/*} catch (IOException e) {
+			} catch (IOException e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
 			} catch (BencodingException e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
-			*/
 	}
 	
 	private static ArrayList<Peer> getListOfPeersHttpUrl(TorrentInfo tInfo) throws IOException, BencodingException, URISyntaxException
@@ -178,6 +177,17 @@ private final int left;*/
 	        System.out.println("IP-> " + ip);
 		}
 		return p;
+	}
+	
+	private static ArrayList<Peer> getRUPeer(ArrayList<Peer> peerlist) {
+		ArrayList<Peer> RUPeer = new ArrayList<Peer>();
+		String peerIdString;
+		for (Peer p: peerlist){
+			peerIdString = p.getStringPeerId();
+			if(peerIdString.charAt(0)=='R' && peerIdString.charAt(1)=='U')
+				RUPeer.add(p);
+		}
+		return RUPeer;		
 	}
 
 	public static byte[] getRequest(TorrentInfo tInfo) throws IOException, URISyntaxException {
