@@ -131,11 +131,11 @@ private final int left;*/
 			LOGGER.info("Getting list of peers...");
 			try {
 				//generatePeerId();
-				ArrayList<Peer> peers = getListOfPeersHttpUrl(tInfo);
+				ArrayList<Peer> peers = getListOfPeersHttpUrl(tInfo); //This method has already been complete in my book
 				
 				LOGGER.info("Retrieved peers. Extracting peers with -RU prefix");
 				
-				Peer RUPeer = getRUPeer(peers);
+				Peer RUPeer = getRUPeer(peers); //This method has also been finished
 				
 				if (RUPeer == null) 
 				{
@@ -143,7 +143,7 @@ private final int left;*/
 					System.exit(1);
 				}
 				LOGGER.info("Extracted appropriate peers. Performing handshake" );
-				peerHandshake(RUPeer, tInfo);
+				peerHandshake(RUPeer, tInfo); //I'm working on this method at the bottom
 				
 			} catch (IOException e) {
 				// TODO Auto-generated catch block
@@ -154,6 +154,8 @@ private final int left;*/
 			}
 	}
 	
+	
+	// It contacts the tracker, receives a byte array from it and turns the byte array into a list of peers
 	private static ArrayList<Peer> getListOfPeersHttpUrl(TorrentInfo tInfo) throws IOException, BencodingException, URISyntaxException
 	{
 
@@ -194,6 +196,7 @@ private final int left;*/
 		return p;
 	}
 	
+	//This method returns the Peer(s) with the -RU prefix
 	private static Peer getRUPeer(ArrayList<Peer> peerlist) {
 		String peerIdString;
 		for (Peer p: peerlist){
@@ -250,10 +253,11 @@ private final int left;*/
 		return peerId;
 	}
 	
+	//This method is used to handshake and communicate from the peer
 	private static void peerHandshake(Peer p, TorrentInfo ti) throws IOException, BencodingException, NoSuchAlgorithmException {
-		//byte id;
+		byte id;
 		int message_length, pieceDesired=0;
-		Socket TCPSocket = new Socket(p.ip, p.port);
+		Socket TCPSocket = new Socket(p.ip, p.port); //Created the TCP 
 		byte[] reserved = new byte[8], peerHandshake = new byte[68], length = new byte[4];
 		
 		//BufferedReader br = new BufferedReader(new InputStreamReader(TCPSocket.getInputStream()));
@@ -261,18 +265,19 @@ private final int left;*/
 		DataOutputStream os = new DataOutputStream(TCPSocket.getOutputStream());
 		String protocolId = "BitTorrent Protocol", peerID = p.getStringPeerId(), peerResponse;
 		
-		Arrays.fill( reserved, (byte) 0 );
+		//This was my way of sending the handshake
+		/*Arrays.fill( reserved, (byte) 0 );
 		os.writeByte(19);
 		os.writeBytes(protocolId);
 		os.write(reserved, 0, reserved.length);
 		byte[] hash = ti.info_hash.array();
 		os.write(Bencoder2.encode((ByteBuffer.wrap(hash))));
 		System.out.println(new String(clientID));
-		os.write(clientID);
+		os.write(clientID);*/
 		
-
+		//This is another's programmer's approach that I used for testing purposes
 		//1+19+8+20+20 bytes in a handshake
-		/*byte[] handshakeMessage = new byte[68];
+		byte[] handshakeMessage = new byte[68];
 		int index = 0;
 		//first byte is 0
 		handshakeMessage[index] = 0x13;
@@ -301,42 +306,20 @@ private final int left;*/
 			handshakeMessage[index] = clientID[i];	
 			index++;
 		}
-
-		/*byte[] handshake = new byte[68];
 		
-		handshake[index] = 0x13;
-		index++;
+		os.write(handshakeMessage);
 		
-		byte[] BTChars = { 'B', 'i', 't', 'T', 'o', 'r', 'r', 'e', 'n', 't', ' ',
-				'p', 'r', 'o', 't', 'o', 'c', 'o', 'l' };
-		System.arraycopy(BTChars, 0, handshake, index, BTChars.length);
-		index += BTChars.length;
-		
-		byte[] zero = new byte[8];
-		System.arraycopy(zero, 0, handshake, index, zero.length);
-		index += zero.length;
-		
-		System.arraycopy(ti.info_hash.array(), 0, handshake, index, ti.info_hash.array().length);
-		index += ti.info_hash.array().length;
-		
-		System.arraycopy(clientID, 0, handshake, index, clientID.length);
-		*/
-		
-		//os.write(handshakeMessage);
-		
+		//This is where we receive Peer's handshake. The TA said via forum that problems that we have communicating with the peer might be the 
+		// result of sending a bad handshake or receiving a bad handshake the following code tests the latter.
 		dis.read(peerHandshake, 0, 68);
-		/*System.out.println("Peer handshake:");
-		for (int i = 0; i < peerHandshake.length; i++)
-		{
-			System.out.println(peerHandshake[i]);
-		}*/
 		
+		//Just to see what the returning handshake looks like
+		/*System.out.println("Peer handshake:");
 		/*for(int i = 0; i < 68; i++)
 			System.out.println(peerHandshake[i]);
-		System.out.println("Done reading peerHandshake");
-		for (int i = 0; i < 68; i++ )
-			System.out.println(ti.info_hash.array()[i]);
-		System.out.println(new String(peerHandshake));*/
+		System.out.println("Done reading peerHandshake");*/
+		
+		//This code checks that the peerIDs matched. I added print statements such that I could check that the two matched byte for byte. 
 		String handshakePeerID = new String (Arrays.copyOfRange(peerHandshake, 48, 68));
 		//System.out.println(handshakePeerID);
 		//System.out.println(peerID);
@@ -349,11 +332,16 @@ private final int left;*/
 		    		return;
 		    	}
 		 }
+		 
+		 //Not sure what this chunk was for. 
 		 /*MessageDigest digest = null;
 		 digest = MessageDigest.getInstance("SHA-1");
+		 digest.update(peerHandshake);
+		 byte[] info_hash_of_response = digest.digest();*/
 		 
-		digest.update(peerHandshake);*/
-		//byte[] info_hash_of_response = digest.digest();
+		 //The commented out chunk was used in order to test that the hashes were matching byte for byte. According to my tests, this program
+		 //was able to receive a valid handshake from the peer. The TA then said that if the problem's not the handshake, then it's the way 
+		 //subsequent messages were sent.
 		byte[] info_hash_of_response = Arrays.copyOfRange(peerHandshake, 28, 48);
 		/*for(int i = 0; i<20; i++){
 			System.out.println(info_hash_of_response[i]);
@@ -364,40 +352,52 @@ private final int left;*/
 	    		return;
 	    	}
 	 	}*/
+		
 		if (!Arrays.equals(info_hash_of_response, ti.info_hash.array())){
 			LOGGER.log(Level.SEVERE, "Peer connection issue: info hashes do not match");
     		TCPSocket.close();
     		return;
 	    }
 		System.out.println("Info hashes match.");
+		
 		//Sending interested message
 		LOGGER.info("Sending Interested message" );
 		
-		/*os.writeByte(1);
-		os.writeInt( 2 );*/
+		
+		//Here is where I was having trouble. The code I left uncommented was the code I was using before. This little chunk was suppose
+		//to send an interested message. The commented out chunks were other attempt versions. I think the problem is here in which 
+		//I need to find a way to send a message such that it doesn't cause problems for me in the future.
+		
+		//os.writeByte(1);
+		//os.writeInt( 2 );
+		
 		byte [] interested = {0, 0, 0, 1, 2};
 		os.write(interested);
+		
 		/*ByteBuffer buf = ByteBuffer.allocate(8); // two 4-byte integers
 		buf.putInt( 1 ).putInt( 2 );
 		buf.flip();
 		byte[] b = buf.array();
 		os.write(b);*/
+		
+		// When I run the code, this is where the program chokes. After sending that interested message, it's suppose to wait for
+		// the peer's unchoke message. However, if I run the code, I'll be getting an endless stream of "messages" of length -1.
 		LOGGER.info("Awaiting peer response");
-		/*boolean requestable = false;
+		boolean requestable = false;
 		do {
 			message_length = dis.read(length);
 			System.out.println(message_length);
-			/*if(message_length != 0 && message_length != 1 && message_length != 5 && message_length != 13 ) { 
+			if(message_length != 0 && message_length != 1 && message_length != 5 && message_length != 13 ) { 
 				System.out.println("Junk response");
 				continue;
-			}*/
-			/*System.out.println("Message length: " + message_length);
+			}
+			System.out.println("Message length: " + message_length);
 			if(message_length == 0){
 				System.out.println("keep alive");
 			}
 			id = dis.readByte();
 			System.out.println("id: " + id);
-			else if(message_length == 1){
+			if(message_length == 1){
 				//choking message
 				if(id == 0){
 					System.out.println("peer choked");
@@ -408,32 +408,10 @@ private final int left;*/
 					requestable = true;
 				}
 			}
-			else{
-				if(id == 5){
-					System.out.println(in.available());
-
-					byte[] bitfieldBytes = new byte[length-1];
-					for(int i = 0; i<bitfieldBytes.length; i++){
-						bitfieldBytes[i] = this.in.readByte();
-					}
-					
-					boolean[] bitfield = convert(bitfieldBytes, Download.torrent.piece_hashes.length);
-					System.out.println("Total number of pieces: " + Download.torrent.piece_hashes.length);
-					int pieceCount = 0;
-					this.bitfield = bitfield;
-					for(int i = 0; i<this.bitfield.length; i++){
-						if(bitfield[i] == true){
-							pieceCount++;
-						}
-					}
-					System.out.println("This peer has " + pieceCount + " of them");
-					System.out.println();
-					out.write(interested);
-				}
-		} while(!requestable);*/
+		} while(!requestable);
 		
 		
-		boolean chokingUs = true;
+		/*boolean chokingUs = true;
 		boolean connected = true;
 		System.out.println("reading messages");
 		while(connected){			
@@ -570,7 +548,7 @@ private final int left;*/
 				}
 
 			}
-		}	
+		}*/	
 		TCPSocket.close();
 	}
 	
