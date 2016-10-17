@@ -11,6 +11,7 @@ import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.ByteBuffer;
 import java.io.IOException;
+import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -20,6 +21,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
 import GivenTools.Bencoder2;
 import GivenTools.BencodingException;
 import GivenTools.TorrentInfo;
@@ -208,7 +210,7 @@ private final int left;*/
 	public static byte[] getRequest(TorrentInfo tInfo) throws IOException, URISyntaxException {
 		byte[] response;
 		int contentLength; 
-		URL key = makeKey(tInfo);
+		URL key = makeKey(tInfo, 0);
 		HttpURLConnection connection = (HttpURLConnection)key.openConnection();
 		connection.setRequestMethod("GET");
 		//notetoself: change variable names to avoid plagarism
@@ -219,19 +221,30 @@ private final int left;*/
 		return response;
 	}
 	
+	public static void getRequest(TorrentInfo tInfo, int flag) throws IOException, URISyntaxException {
+		URL key = makeKey(tInfo, flag);
+		HttpURLConnection connection = (HttpURLConnection)key.openConnection();
+		connection.setRequestMethod("GET");
+	}
+	
 	public static String get_string(ByteBuffer b){ 
 		String s = new String(b.array());
 		return s;
 	}
 		
-	private static URL makeKey(TorrentInfo ti) throws URISyntaxException, MalformedURLException {
+	private static URL makeKey(TorrentInfo ti, int flag) throws URISyntaxException, MalformedURLException {
 		byte[] hash = ti.info_hash.array();
-		clientID = generatePeerId();
+		if (flag == 0)
+			clientID = generatePeerId();
 		URI uri = ti.announce_url.toURI();
 		String stringKey = uri.getPath() + "?info_hash=";
 		for(byte b : hash)
 			stringKey = stringKey + "%" + String.format("%02X", b);
-		stringKey = stringKey + "&peer_id=" + clientID + "&port=6881&uploaded=0&downloaded=0&left=" + ti.file_length + "&event=started";
+		if(flag == 0 || flag == 1) {
+			stringKey = stringKey + "&peer_id=" + clientID + "&port=6881&uploaded=0&downloaded=0&left=" + ti.file_length;
+			if (flag == 1)
+				stringKey = stringKey + "+ &event=started";
+		}
 	    URI newUri = uri.resolve(stringKey);
 	    return newUri.toURL();
 	}
@@ -251,7 +264,7 @@ private final int left;*/
 	}
 	
 	//This method is used to handshake and communicate from the peer
-	private static void peerHandshake(Peer p, TorrentInfo ti) throws IOException, BencodingException, NoSuchAlgorithmException {
+	private static void peerHandshake(Peer p, TorrentInfo ti) throws IOException, BencodingException, NoSuchAlgorithmException, URISyntaxException {
 		byte id;
 		int message_length;
 		Socket TCPSocket = new Socket(p.ip, p.port); //Created the TCP 
@@ -372,25 +385,48 @@ private final int left;*/
 					
 					os.write(interested);
 					break;
-				case 7:					
+				case 7:		
+					getRequest(ti, 1);
+					
+					if(index == 0 && left == ti.piece_length) {
+						
+					}
 					dis.read(response, 0, response.length); 
 	
-					System.arraycopy(response, 13, piece, ti.piece_length - left, length);
-					System.out.println("\n Saved something");
-					left -= length;
+					System.arraycopy(response, 8, piece, ti.piece_length - left, length);
+					/*message_length = dis.readInt();
+					System.out.println("Index: " + message_length);
+					message_length = dis.readInt();
+					System.out.println("Begin: " + message_length);*/
+					
+					//dis.read(response);
 					
 					//for(int i = 0; i < length; i++)
-						//piece[ti.piece_length - left + i] = response[i + 13];
+						//piece[ti.piece_length - left + i] = response[i + 8];
+					
+					/*ti.piece_hashes[piece].duplicate().get(torrentFileHash);
+					
+					 MessageDigest digest = null;
+					 digest = MessageDigest.getInstance("SHA-1");
+					 digest.update(peerHandshake);
+					 byte[] info_hash_of_response = digest.digest();*/
+					 
+					/*byte[] info_hash_of_response = Arrays.copyOfRange(peerHandshake, 28, 48);
+					
+					if (!Arrays.equals(info_hash_of_response, ti.info_hash.array())){
+					
+					System.out.println("\n Saved something");
+					left -= length;
 					
 					if(left == 0){
 						System.arraycopy(piece, 0, file, downloaded, piece.length);
 						downloaded += length;
 						index++;
 						left = ti.piece_length;
-					}
-					System.out.println("\n requestable: " + requestable);
+					}*/
+					/*System.out.println("\n requestable: " + requestable);
 					System.out.println("index: " + index);
-					System.out.println("left: " + left + "\n");
+					System.out.println("left: " + left + "\n");*/
 				}
 			}
 			if(requestable) {
