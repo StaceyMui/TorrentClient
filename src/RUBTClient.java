@@ -203,9 +203,6 @@ private final int left;*/
 		for (Peer p: peerlist){
 			peerIdString = p.getStringPeerId();
 			if(peerIdString.charAt(0)=='-' && peerIdString.charAt(1)=='R' && peerIdString.charAt(2)=='U') {
-				System.out.println(peerIdString);
-				System.out.println(p.ip);
-				System.out.println(p.port);
 				return p;
 			}
 		}
@@ -260,14 +257,14 @@ private final int left;*/
 	//This method is used to handshake and communicate from the peer
 	private static void peerHandshake(Peer p, TorrentInfo ti) throws IOException, BencodingException, NoSuchAlgorithmException {
 		byte id;
-		int message_length, pieceDesired=0;
+		int message_length;
 		Socket TCPSocket = new Socket(p.ip, p.port); //Created the TCP 
-		byte[] reserved = new byte[8], peerHandshake = new byte[68], length = new byte[4];
+		byte[] reserved = new byte[8], peerHandshake = new byte[68];
 		
 		//BufferedReader br = new BufferedReader(new InputStreamReader(TCPSocket.getInputStream()));
 		DataInputStream dis = new DataInputStream(TCPSocket.getInputStream());
 		DataOutputStream os = new DataOutputStream(TCPSocket.getOutputStream());
-		String protocolId = "BitTorrent Protocol", peerID = p.getStringPeerId(), peerResponse;
+		String protocolId = "BitTorrent Protocol", peerID = p.getStringPeerId();
 		
 		//This was my way of sending the handshake
 		Arrays.fill( reserved, (byte) 0 );
@@ -395,8 +392,14 @@ private final int left;*/
 		// When I run the code, this is where the program chokes. After sending that interested message, it's suppose to wait for
 		// the peer's unchoke message. However, if I run the code, I'll be getting an endless stream of "messages" of length -1.
 		LOGGER.info("Awaiting peer response");
+		
+		int downloaded = 0, index = 0, length;
 		boolean requestable = false;
-		do {
+		byte [] request = new byte[17],  requestStart= {0, 0, 0, 13, 6}, indexBytes, offset, lengthBytes;
+		System.arraycopy(requestStart, 0, request, 0, requestStart.length);
+		int left = ti.piece_length;
+		
+		while (downloaded != ti.file_length) {
 			message_length = dis.readInt();
 			System.out.println("Message length: " + message_length);
 			if(message_length == 0){
@@ -405,23 +408,25 @@ private final int left;*/
 			/*if (dis.available()<=0){
 				continue;
 			}*/
-			id = dis.readByte();
-			System.out.println("id: " + id);
-			if(message_length == 1){
-				//choking message
-				if(id == 0){
+			else {
+				id = dis.readByte();
+				System.out.println("id: " + id);
+				switch (id) {
+				case 0:
+					if(message_length != 1){
+						continue;
+					}
 					System.out.println("peer choked");
-				}
-				//unchoking message
-				else if(id == 1){
+					requestable = false;
+					break;
+				case 1:
+					if(message_length != 1){
+						continue;
+					}
 					System.out.println("peer unchoked");
 					requestable = true;
-				}
-			}
-			else{
-				if(id == 5){
-					System.out.println("Bitfield");
-
+					break;
+				case 5:
 					byte[] bitfieldBytes = new byte[message_length-1];
 					for(int i = 0; i<bitfieldBytes.length; i++){
 						bitfieldBytes[i] = dis.readByte();
@@ -450,75 +455,29 @@ private final int left;*/
 					//os.writeByte( 2 );
 					
 					os.write(interested);
-					
-					/*ByteBuffer buf = ByteBuffer.allocate(8); // two 4-byte integers
-					buf.putInt( 1 ).putInt( 2 );
-					buf.flip();
-					byte[] b = buf.array();
-					os.write(b);*/
-					
-					//os.writeInt(1);
-					//os.write(2);
+					break;
+				case 7:
+					System.out.println("Download and verify piece");
 				}
 			}
-		} while(!requestable);
-		
-		/*byte[] request = new byte[17];
-		byte [] allButLength = {0, 0, 0, 13, 6, 0, 0, 0, 0, 0, 0, 0, 0};
-		System.arraycopy(allButLength, 0, request, 0, allButLength.length);
-		System.arraycopy(ByteBuffer.allocate(4).putInt(16384).array(), 0, request, 13, 4);
-		
-		os.write(request);*/
-		
-		int pieceNumber = 0;
-		int requestLength = 16384;
-		int left = ti.piece_length;
-		byte[] request = new byte[17];
-		
-		request[0] = 0;
-	    request[1] = 0;
-	    request[2] = 0;
-	    request[3] = 13;
-	    request[4] = 6;
-	    
-	    byte[] pNBytes = ByteBuffer.allocate(4).putInt(pieceNumber).array();
-	    //PieceNumberBytes
-	    byte[] offsetBytes, lengthBytes;
-	    request[5] = pNBytes[0]; request[6] = pNBytes[1]; request[7] = pNBytes[2]; request[8] = pNBytes[3];
-	    
-	    byte[] response = new byte[100]; //first subpiece
-		byte[] finalPiece = new byte[ti.piece_length];
-			
-			if(left > 16384){
-				//make a request for a piece of length 16384
-				requestLength = 16384;
-			}else{
-				//make a request for a piece of length however many bytes are left
-				requestLength = left;
-			}
-			
-			offsetBytes = ByteBuffer.allocate(4).putInt(ti.piece_length - left).array();
-		    
-		    request[9] = offsetBytes[0]; request[10] = offsetBytes[1]; request[11] = offsetBytes[2]; request[12] = offsetBytes[3];
-		    
-		    lengthBytes = ByteBuffer.allocate(4).putInt(requestLength).array();
-		    
-		    request[13] = lengthBytes[0];
-		    request[14] = lengthBytes[1];
-		    request[15] = lengthBytes[2];
-		    request[16] = lengthBytes[3];
-		    
-		    os.write(request);
-		    
-		boolean run = true;
-		while(run){
-			message_length = dis.readInt();
-			System.out.println("Message length: " + message_length);
-			id = dis.readByte();
-			System.out.println("id: " + id);
-			if(id == 7){
-				System.out.println("Hooray! Completed step 4");
-				run = false;
+			if(requestable) {
+				indexBytes = ByteBuffer.allocate(4).putInt(index).array();
+				System.arraycopy(indexBytes, 0, request, 5, 4);
+				offset = ByteBuffer.allocate(4).putInt(ti.piece_length - left).array();
+				System.arraycopy(offset, 0, request, 9, 4);
+				
+				if(left > 16384){
+					//make a request for a piece of length 16384
+					length = 16384;
+				}else{
+					//make a request for a piece of length however many bytes are left
+					length = left;
+				}
+				
+				lengthBytes = ByteBuffer.allocate(4).putInt(length).array();
+				System.arraycopy(lengthBytes, 0, request, 13, 4);
+				
+				os.write(request);
 			}
 		}
 		/*boolean chokingUs = true;
