@@ -329,12 +329,13 @@ private final int left;*/
 		int downloaded = 0, index = 0, length = 16384, offset;
 		boolean requestable = false;
 		byte [] request = new byte[17],  requestStart= {0, 0, 0, 13, 6}, indexBytes, offsetBytes, lengthBytes, response = new byte[16400], piece = new byte[ti.piece_length], file = new byte[ti.file_length];
+		byte [] unchokeMessage = {0, 0, 0, 1, 0}; 
 		System.arraycopy(requestStart, 0, request, 0, requestStart.length);
 		int left = ti.piece_length;
 		
 		while (downloaded != ti.file_length) {
 			message_length = dis.readInt();
-			System.out.println("Message length: " + message_length);
+			//System.out.println("Message length: " + message_length);
 			if(message_length == 0){
 				System.out.println("keep alive");
 			}
@@ -386,14 +387,55 @@ private final int left;*/
 					os.write(interested);
 					break;
 				case 7:		
-					getRequest(ti, 1);
-					
-					if(index == 0 && left == ti.piece_length) {
-						
-					}
-					dis.read(response, 0, response.length); 
-	
+					//First download -> sending getRequest
+					/*if(index == 0 && left == ti.piece_length) {
+						getRequest(ti, 1);
+					}*/
+					dis.read(response, 0, response.length);
+					System.out.println("Left before download: " + left);
+					System.out.println(requestable);
 					System.arraycopy(response, 8, piece, ti.piece_length - left, length);
+					
+					//os.write();
+					
+					/*dis.read(response, 0, 16392); // TODO: Make sure it is not a request message!
+					
+					piece = ;
+				  	
+				  	for(int i = 0; i < 16384; i++){
+				  		piece[ti.piece_length - left + i] = response[i + 8];
+				  	}*/
+				  	
+					left = left - length;
+					downloaded += length;
+					
+					System.out.println("downloaded: " + downloaded );
+					System.out.println("length: " + length );
+					//System.out.println("Left: " + left );
+					//response = null;
+					
+				/*	byte[] torrentFileHash = new byte[20];
+
+					ti.piece_hashes[piece].duplicate().get(torrentFileHash);
+				
+					MessageDigest digest;
+					try {
+						digest = MessageDigest.getInstance("SHA1");
+						byte[] pieceHash = digest.digest(pieceBytes);
+						System.out.println("Attempting to write piece " + piece + " to address " + piece*torrent.piece_length + " for " + pieceBytes.length + " bytes");
+
+						if(Arrays.equals(pieceHash, torrentFileHash)){
+
+							outputFile.seek(piece*torrent.piece_length);
+
+								outputFile.write(pieceBytes);
+								
+								byte[] checkBytes = new byte[torrent.piece_length];
+								outputFile.read(checkBytes);
+
+								//ToolKit.printMessage(checkBytes, true);
+						}*/
+					
 					/*message_length = dis.readInt();
 					System.out.println("Index: " + message_length);
 					message_length = dis.readInt();
@@ -416,22 +458,22 @@ private final int left;*/
 					if (!Arrays.equals(info_hash_of_response, ti.info_hash.array())){
 					
 					System.out.println("\n Saved something");
-					left -= length;
+					left -= length;*/
 					
 					if(left == 0){
-						System.arraycopy(piece, 0, file, downloaded, piece.length);
-						downloaded += length;
+						System.arraycopy(piece, 0, file, downloaded, length);
 						index++;
 						left = ti.piece_length;
-					}*/
+					}
 					/*System.out.println("\n requestable: " + requestable);
 					System.out.println("index: " + index);
 					System.out.println("left: " + left + "\n");*/
 				}
 			}
 			if(requestable) {
+				System.out.println("Left: " + left);
 				offset = ti.piece_length-left;
-				System.out.println("\nSending request");
+				//System.out.println("\nSending request");
 				System.out.println("index: " + index);
 				System.out.println("offset: " + offset + "\n");
 				indexBytes = ByteBuffer.allocate(4).putInt(index).array();
