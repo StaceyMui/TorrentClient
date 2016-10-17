@@ -1,10 +1,8 @@
-import java.io.BufferedReader;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.DataInputStream;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.Socket;
@@ -13,7 +11,6 @@ import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.ByteBuffer;
 import java.io.IOException;
-import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -23,7 +20,6 @@ import java.util.Map;
 import java.util.Random;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
 import GivenTools.Bencoder2;
 import GivenTools.BencodingException;
 import GivenTools.TorrentInfo;
@@ -275,73 +271,9 @@ private final int left;*/
 		os.write(hash);
 		os.write(clientID);
 		
-		//This is another's programmer's approach that I used for testing purposes
-		//1+19+8+20+20 bytes in a handshake
-		/*byte[] handshakeMessage = new byte[68];
-		int index = 0;
-		//first byte is 0
-		handshakeMessage[index] = 19;
-		index++;
-		//'BitTorrent protocol' string
-		
-		for(int i = 0; i<19; i++){
-			handshakeMessage[index] = (byte) "BitTorrent protocol".charAt(i);
-			index++;
-		}
-		
-		//8 '0's
-		for(int i = 0; i<8; i++){
-			handshakeMessage[index] = 0;
-			index++;
-		}
-		
-		//20-byte torrent info hash
-		for(int i = 0; i<20; i++){
-			handshakeMessage[index] = ti.info_hash.get(i);
-			index++;
-		}
-		
-		//20-byte peer ID
-		for(int i = 0; i<20; i++){
-			handshakeMessage[index] = clientID[i];	
-			index++;
-		}
-		
-		os.write(handshakeMessage);*/
-		
-		/*int index = 0;
-		byte[] handshake = new byte[68];
-		
-		handshake[index] = 0x13;
-		index++;
-		
-		byte[] BTChars = { 'B', 'i', 't', 'T', 'o', 'r', 'r', 'e', 'n', 't', ' ',
-				'p', 'r', 'o', 't', 'o', 'c', 'o', 'l' };
-		System.arraycopy(BTChars, 0, handshake, index, BTChars.length);
-		index += BTChars.length;
-		
-		byte[] zero = new byte[8];
-		System.arraycopy(zero, 0, handshake, index, zero.length);
-		index += zero.length;
-		
-		System.arraycopy(ti.info_hash.array(), 0, handshake, index, ti.info_hash.array().length);
-		index += ti.info_hash.array().length;
-		
-		System.arraycopy(clientID, 0, handshake, index, clientID.length);
-		System.out.println(clientID.length);
-		
-		
-		os.write(handshake);*/
-		
 		//This is where we receive Peer's handshake. The TA said via forum that problems that we have communicating with the peer might be the 
 		// result of sending a bad handshake or receiving a bad handshake the following code tests the latter.
 		dis.read(peerHandshake, 0, 68);
-		
-		//Just to see what the returning handshake looks like
-		/*System.out.println("Peer handshake:");
-		/*for(int i = 0; i < 68; i++)
-			System.out.println(peerHandshake[i]);
-		System.out.println("Done reading peerHandshake");*/
 		
 		//This code checks that the peerIDs matched. I added print statements such that I could check that the two matched byte for byte. 
 		String handshakePeerID = new String (Arrays.copyOfRange(peerHandshake, 48, 68));
@@ -363,19 +295,7 @@ private final int left;*/
 		 digest.update(peerHandshake);
 		 byte[] info_hash_of_response = digest.digest();*/
 		 
-		 //The commented out chunk was used in order to test that the hashes were matching byte for byte. According to my tests, this program
-		 //was able to receive a valid handshake from the peer. The TA then said that if the problem's not the handshake, then it's the way 
-		 //subsequent messages were sent.
 		byte[] info_hash_of_response = Arrays.copyOfRange(peerHandshake, 28, 48);
-		/*for(int i = 0; i<20; i++){
-			System.out.println(info_hash_of_response[i]);
-			System.out.println(ti.info_hash.array()[i]);
-	    	if(info_hash_of_response[i] != ti.info_hash.array()[i]){
-	    		LOGGER.log(Level.SEVERE, "Connected with the wrong peer.");
-	    		TCPSocket.close();
-	    		return;
-	    	}
-	 	}*/
 		
 		if (!Arrays.equals(info_hash_of_response, ti.info_hash.array())){
 			LOGGER.log(Level.SEVERE, "Peer connection issue: info hashes do not match");
@@ -393,9 +313,9 @@ private final int left;*/
 		// the peer's unchoke message. However, if I run the code, I'll be getting an endless stream of "messages" of length -1.
 		LOGGER.info("Awaiting peer response");
 		
-		int downloaded = 0, index = 0, length;
+		int downloaded = 0, index = 0, length = 16384, offset;
 		boolean requestable = false;
-		byte [] request = new byte[17],  requestStart= {0, 0, 0, 13, 6}, indexBytes, offset, lengthBytes;
+		byte [] request = new byte[17],  requestStart= {0, 0, 0, 13, 6}, indexBytes, offsetBytes, lengthBytes, response = new byte[16400], piece = new byte[ti.piece_length], file = new byte[ti.file_length];
 		System.arraycopy(requestStart, 0, request, 0, requestStart.length);
 		int left = ti.piece_length;
 		
@@ -444,10 +364,6 @@ private final int left;*/
 					System.out.println("This peer has " + pieceCount + " of them");
 					System.out.println();
 					
-					//Here is where I was having trouble. The code I left uncommented was the code I was using before. This little chunk was suppose
-					//to send an interested message. The commented out chunks were other attempt versions. I think the problem is here in which 
-					//I need to find a way to send a message such that it doesn't cause problems for me in the future.
-					
 					//os.writeByte(1);
 					//os.writeInt( 2 );
 					
@@ -456,15 +372,36 @@ private final int left;*/
 					
 					os.write(interested);
 					break;
-				case 7:
-					System.out.println("Download and verify piece");
+				case 7:					
+					dis.read(response, 0, response.length); 
+	
+					System.arraycopy(response, 13, piece, ti.piece_length - left, length);
+					System.out.println("\n Saved something");
+					left -= length;
+					
+					//for(int i = 0; i < length; i++)
+						//piece[ti.piece_length - left + i] = response[i + 13];
+					
+					if(left == 0){
+						System.arraycopy(piece, 0, file, downloaded, piece.length);
+						downloaded += length;
+						index++;
+						left = ti.piece_length;
+					}
+					System.out.println("\n requestable: " + requestable);
+					System.out.println("index: " + index);
+					System.out.println("left: " + left + "\n");
 				}
 			}
 			if(requestable) {
+				offset = ti.piece_length-left;
+				System.out.println("\nSending request");
+				System.out.println("index: " + index);
+				System.out.println("offset: " + offset + "\n");
 				indexBytes = ByteBuffer.allocate(4).putInt(index).array();
 				System.arraycopy(indexBytes, 0, request, 5, 4);
-				offset = ByteBuffer.allocate(4).putInt(ti.piece_length - left).array();
-				System.arraycopy(offset, 0, request, 9, 4);
+				offsetBytes = ByteBuffer.allocate(4).putInt(ti.piece_length - left).array();
+				System.arraycopy(offsetBytes, 0, request, 9, 4);
 				
 				if(left > 16384){
 					//make a request for a piece of length 16384
@@ -480,110 +417,8 @@ private final int left;*/
 				os.write(request);
 			}
 		}
-		/*boolean chokingUs = true;
-		boolean connected = true;
-		System.out.println("reading messages");
-		while(connected){			
-				message_length = dis.readInt();
-				System.out.println("Read int");
-				if(message_length == 0){
-					System.out.println("keep alive");
-					return;
-				}
-				byte id = dis.readByte();
-				if(message_length == 1){
-					//choking message
-					if(id == 0){
-						System.out.println("choking us");
-						chokingUs = true;
-					}
-					//unchoking message
-					else if(id == 1){
-						System.out.println("no longer choking us");
-						chokingUs = false;
-						//this.getPiece(0);
-					}
-					//interested message
-					else if(id == 2){
-						System.out.println("interested in us");
-					}
-					//not interested message
-					else if(id == 3){
-						System.out.println("not interested in us");
-					}
-				}
-				//have message
-				else if(message_length == 5 && id == 4){
-					System.out.println("have = " + dis.readInt());
-					
-				}
-				else{
-					if(id == 5){
-						System.out.println(dis.available());
-
-						byte[] bitfieldBytes = new byte[message_length-1];
-						for(int i = 0; i<bitfieldBytes.length; i++){
-							bitfieldBytes[i] = dis.readByte();
-						}
-						
-						boolean[] bitfield = convert(bitfieldBytes, ti.piece_hashes.length);
-						System.out.println("Total number of pieces: " + ti.piece_hashes.length);
-						int pieceCount = 0;
-						//this.bitfield = bitfield;
-						for(int i = 0; i<bitfield.length; i++){
-							if(bitfield[i] == true){
-								pieceCount++;
-							}
-						}
-						System.out.println("This peer has " + pieceCount + " of them");
-						System.out.println();
-						os.write(interested);
-					}
-				}
-			System.out.println(dis.available());
-			if(pieceDesired != -1 && !chokingUs){
-				int pieceNumber = 0;
-				int requestLength = 16384;
-				int left = ti.piece_length;
-				byte[] request = new byte[17];
-				
-				request[0] = 0;
-			    request[1] = 0;
-			    request[2] = 0;
-			    request[3] = 13;
-			    request[4] = 6;
-			    
-			    byte[] pNBytes = ByteBuffer.allocate(4).putInt(pieceNumber).array();
-			    //PieceNumberBytes
-			    byte[] offsetBytes, lengthBytes;
-			    request[5] = pNBytes[0]; request[6] = pNBytes[1]; request[7] = pNBytes[2]; request[8] = pNBytes[3];
-			    
-			    byte[] response = new byte[100]; //first subpiece
-				byte[] finalPiece = new byte[ti.piece_length];
-				
-				while(left > 0){
-					
-					if(left > 16384){
-						//make a request for a piece of length 16384
-						requestLength = 16384;
-					}else{
-						//make a request for a piece of length however many bytes are left
-						requestLength = left;
-					}
-					
-					offsetBytes = ByteBuffer.allocate(4).putInt(ti.piece_length - left).array();
-				    
-				    request[9] = offsetBytes[0]; request[10] = offsetBytes[1]; request[11] = offsetBytes[2]; request[12] = offsetBytes[3];
-				    
-				    lengthBytes = ByteBuffer.allocate(4).putInt(requestLength).array();
-				    
-				    request[13] = lengthBytes[0];
-				    request[14] = lengthBytes[1];
-				    request[15] = lengthBytes[2];
-				    request[16] = lengthBytes[3];
-				    
-				    os.write(request);
-				    os.flush();
+		System.out.println("Loop has ended");
+		/*
 				  	
 				  	dis.read(response, 0, 100); // TODO: Make sure it is not a request message!
 				  	if (response == null){
